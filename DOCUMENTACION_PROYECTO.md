@@ -1,10 +1,10 @@
 ﻿# DOCUMENTACION TECNICA Y REPORTE DE ARQUITECTURA INTEGRAL
-## PLATAFORMA FINANCIERA DE SIMULACION Y ANALISIS DE RENDIMIENTOS (v2.0)
+## PLATAFORMA FINANCIERA DE SIMULACION Y RENDIMIENTOS (v2.0)
 
 - **Repositorio Oficial:** [https://github.com/Sant-Os/proyecto_is.git](https://github.com/Sant-Os/proyecto_is.git)
 - **Autor / Propietario:** Sant-Os <santos.c.nnyrd@gmail.com>
-- **Tecnologias Centrales:** Next.js 14, React 18, TypeScript, Tailwind CSS, Node.js, Express, Prisma ORM, PostgreSQL (Supabase).
-- **Fecha de Emision:** Septiembre 2026
+- **Tecnologias Centrales:** Next.js 14, React 18, TypeScript, Tailwind CSS, Node.js, Express, Prisma ORM, PostgreSQL (Supabase Connection Pooler).
+- **Ultima Actualizacion:** Septiembre 2026
 
 ---
 
@@ -16,8 +16,8 @@ La **Plataforma Financiera** es un sistema integral cliente-servidor disenado pa
 El sistema combina:
 1. Una interfaz frontend interactiva de alta densidad de informacion construida bajo estandares visuales industriales (sin emojis ni iconografia superflua, utilizando tablas estructuradas y graficos vectoriales SVG puros).
 2. Un motor de calculo desacoplado y deterministicamente verificado en el cliente y persistido en el servidor.
-3. Un backend robusto en Node.js y Express con autenticacion basada en JSON Web Tokens (JWT) y control de acceso basado en roles (RBAC).
-4. Persistencia relacional en PostgreSQL alojada en Supabase mediante el ORM Prisma, con trazabilidad inmutable de eventos de auditoria y politicas de aislamiento de datos.
+3. Un backend robusto en Node.js y Express adaptado tanto para ejecucion local como para arquitectura **Serverless en Vercel**, con autenticacion basada en JSON Web Tokens (JWT) y control de acceso basado en roles (RBAC).
+4. Persistencia relacional en PostgreSQL alojada en Supabase a traves del **Connection Pooler IPv4** mediante el ORM Prisma, con trazabilidad inmutable de eventos de auditoria y politicas de aislamiento de datos.
 
 ### 1.2 Metas del Usuario (Personas)
 
@@ -75,12 +75,11 @@ El sistema combina:
 - **RNF-05 (Compatibilidad y Portabilidad):** Compatibilidad garantizada en navegadores modernos (Google Chrome, Mozilla Firefox, Microsoft Edge, Safari) y diseno responsivo adaptativo para pantallas de escritorio, tabletas y moviles.
 - **RNF-06 (Desacoplamiento Arquitectonico):** Separacion total entre la capa de presentacion (Next.js SPA/SSR) y la capa de servicios (Express REST API) mediante contratos JSON tipados en TypeScript.
 
-
 ---
 
-## 4. ARQUITECTURA GENERAL DEL SISTEMA Y CONEXIONES
+## 4. ARQUITECTURA GENERAL DEL SISTEMA Y DIAGRAMAS DE CONEXION
 
-El sistema opera bajo una arquitectura en capas desacoplada comunicada mediante HTTP/REST y JSON:
+### 4.1 Diagrama de Arquitectura Global
 
 ```mermaid
 graph TD
@@ -128,22 +127,60 @@ graph TD
     T_Log -- "FK usuarioId (SetNull Delete)" --> T_User
 ```
 
-### 4.1 Conexiones entre Componentes
+### 4.2 Diagrama de Topologia de Despliegue en la Nube (Vercel Monorepo + Supabase IPv4 Pooler)
+
+Este diagrama ilustra la arquitectura de produccion desplegada en Vercel, resolviendo el desacoplamiento de monorepositorio y el soporte de conectividad IPv4 hacia la base de datos:
+
+```mermaid
+graph LR
+    subgraph Cliente [Navegador del Usuario]
+        Browser[Navegador Web / HTTPS Client]
+    end
+
+    subgraph Vercel_Cloud [Infraestructura Vercel Edge / Serverless]
+        subgraph Proy_Front [Proyecto 1: Frontend]
+            NextApp[Next.js 14 App Router]
+            NextEnv[Var: NEXT_PUBLIC_API_URL]
+        end
+
+        subgraph Proy_Back [Proyecto 2: Backend]
+            VercelEntry[backend/api/index.ts - Entrypoint]
+            ExpressServerless[Express Serverless Function]
+            CORS_Layer[CORS Dinamico: origin: true]
+            PrismaEngine[Prisma Engine Client]
+            BackEnv[Var: DATABASE_URL, JWT_SECRET]
+        end
+    end
+
+    subgraph Supabase_Cloud [Supabase PostgreSQL Cloud]
+        PoolerIPv4[Connection Pooler IPv4 - Puerto 6543]
+        PgCluster[(PostgreSQL Database Cluster)]
+    end
+
+    Browser -- "1. Visita https://tu-frontend.vercel.app" --> NextApp
+    Browser -- "2. Peticiones API REST (Bearer JWT)" --> CORS_Layer
+    CORS_Layer --> VercelEntry --> ExpressServerless
+    ExpressServerless --> PrismaEngine
+    PrismaEngine -- "3. TCP SSL (aws-0-us-east-1.pooler.supabase.com:6543)" --> PoolerIPv4
+    PoolerIPv4 -- "4. Transacciones SQL con PgBouncer" --> PgCluster
+```
+
+### 4.3 Conexiones entre Componentes
 1. **Frontend a Backend:**
-   - **Protocolo:** HTTP/1.1 REST sobre TCP.
+   - **Protocolo:** HTTP/1.1 REST sobre TCP con TLS/HTTPS.
    - **Formato:** `application/json`.
    - **Autenticacion:** Cabecera estandar `Authorization: Bearer <token_jwt>`.
-   - **Control de Acceso:** CORS configurado en Express con origenes permitidos (`http://localhost:3002`, `http://127.0.0.1:3002`, `http://localhost:3000`).
+   - **CORS Dinamico:** En `backend/src/server.ts`, se habilita `origin: true` con manejo explicito de solicitudes `OPTIONS` preflight, permitiendo que cualquier despliegue (produccion, preview o local) se comunique sin bloqueos de navegador.
 2. **Backend a Base de Datos (Supabase PostgreSQL):**
    - **Protocolo:** PostgreSQL Wire Protocol con encriptacion SSL obligatoria.
-   - **Conector:** Prisma Client utilizando la cadena `DATABASE_URL` configurada con pool de conexiones transaccionales (`pgbouncer=true`).
-   - **Manejo de Transacciones:** Metodos de Prisma (`create`, `findMany`, `deleteMany`, `upsert`) con tipado estatico generado.
+   - **Host y Puerto del Pooler:** `aws-0-us-east-1.pooler.supabase.com:6543`.
+   - **Modo:** Transaccional con parámetro `?pgbouncer=true`.
+   - **Compatibilidad de Red:** 100% compatible con la salida IPv4 de Vercel Serverless.
+
 
 ---
 
 ## 5. CONTRATOS DE COMUNICACION (FRONTEND <-> BACKEND DTOs)
-
-Esta seccion define formalmente el intercambio de datos entre la interfaz visual (Frontend) y los servicios de computo y persistencia (Backend), satisfaciendo la especificacion de entradas, salidas y numeracion de pantallas requerida.
 
 ### 5.1 Perspectiva del Frontend
 
@@ -251,7 +288,6 @@ Para organizar la navegacion y el flujo de trabajo del usuario, la plataforma nu
   - `Vista_Interes_Compuesto` (Formulario y visualizacion de tablas/tantos para calculo compuesto).
   - `Vista_Historial` (Pantalla para consultar los registros almacenados en la base de datos).
 
-
 ---
 
 ## 6. ESPECIFICACION DEL BACKEND (EXPRESS + PRISMA ORM)
@@ -259,14 +295,16 @@ Para organizar la navegacion y el flujo de trabajo del usuario, la plataforma nu
 ### 6.1 Tecnologias y Dependencias
 - **Entorno:** Node.js v18+ con soporte nativo de modulos ES (ESM).
 - **Servidor Web:** Express v4.21.
-- **CORS:** Middleware para control de origenes cruzados con soporte de credenciales.
-- **Criptografia y Autenticacion:** `bcrypt` v5.1 (hasheo seguro) y `jsonwebtoken` v9.0 (firmado de claims JWT).
+- **CORS Dinamico:** Middleware configurado con `origin: true` y soporte de credenciales.
+- **Criptografia y Autenticacion:** `bcryptjs` v3.0 (hasheo seguro) y `jsonwebtoken` v9.0 (firmado de claims JWT).
 - **Capa ORM:** Prisma v6.19 con conector nativo PostgreSQL y generacion de tipos estaticos.
-- **Transpilador:** TypeScript v5.9 y utilitario de ejecucion `tsx`.
+- **Despliegue Serverless:** Archivo `backend/vercel.json` y entrada `backend/api/index.ts`.
 
-### 6.2 Estructura de Directorios y Archivos del Backend
+### 6.2 Estructura de Directorios del Backend
 ```text
 backend/
+├── api/
+│   └── index.ts            # Entrypoint oficial para ejecucion serverless en Vercel
 ├── prisma/
 │   ├── schema.prisma       # Modelado declarativo de tablas, enums y relaciones PostgreSQL
 │   └── seed.ts             # Sembrado idempotente de usuarios maestros (ADMIN y USER)
@@ -281,6 +319,7 @@ backend/
 │   │   └── audit.service.ts        # Servicio inmutable de registro de eventos de auditoria en BD
 │   ├── prisma.ts                   # Instancia singleton del cliente de Prisma ORM
 │   └── server.ts                   # Punto de entrada HTTP, configuracion de middlewares y enrutamiento
+├── vercel.json             # Reglas de reescritura para Vercel Serverless
 ├── package.json
 └── tsconfig.json
 ```
@@ -340,7 +379,39 @@ classDiagram
     AuditService --> PrismaSingleton
 ```
 
-### 6.4 Catalogo de Endpoints de la API REST
+### 6.4 Diagrama de Control de Acceso y Middleware RBAC
+
+```mermaid
+flowchart TD
+    Req[Peticion HTTP Entrante] --> RouteCheck{Tipo de Ruta}
+
+    RouteCheck -->|Ruta Publica /api/auth/login, /health| HandlePublic[Ejecuta Controlador Publico]
+    RouteCheck -->|Ruta Opcional /api/calculos| OptAuth[optionalAuth Middleware]
+    RouteCheck -->|Ruta Protegida /api/auth/me| ReqAuth[requireAuth Middleware]
+    RouteCheck -->|Ruta Administracion /api/admin/*| ReqAdmin[requireAdmin Middleware]
+
+    OptAuth --> HasTokenOpt{Posee Token?}
+    HasTokenOpt -->|Si| VerifyOpt[jwt.verify]
+    VerifyOpt -->|Valido| InjectUserOpt[req.usuario = payload] --> HandleOpt[Ejecuta Controlador]
+    VerifyOpt -->|Invalido| HandleOpt
+    HasTokenOpt -->|No| HandleOpt
+
+    ReqAuth --> HasTokenReq{Posee Token?}
+    HasTokenReq -->|No| Err401[Retorna 401 Unauthorized]
+    HasTokenReq -->|Si| VerifyReq[jwt.verify]
+    VerifyReq -->|Invalido| Err401
+    VerifyReq -->|Valido| InjectUserReq[req.usuario = payload] --> HandleReq[Ejecuta Controlador Protegido]
+
+    ReqAdmin --> HasTokenAdm{Posee Token?}
+    HasTokenAdm -->|No| Err401
+    HasTokenAdm -->|Si| VerifyAdm[jwt.verify]
+    VerifyAdm -->|Invalido| Err401
+    VerifyAdm -->|Valido| CheckRole{req.usuario.rol == ADMIN?}
+    CheckRole -->|No| Err403[Retorna 403 Forbidden]
+    CheckRole -->|Si| HandleAdmin[Ejecuta Controlador Administrativo]
+```
+
+### 6.5 Catalogo de Endpoints de la API REST
 
 | Metodo | Ruta | Seguridad | Descripcion | Codigos de Estado |
 |---|---|---|---|---|
@@ -367,36 +438,31 @@ classDiagram
 - **Estilos:** Tailwind CSS 3.4 configurado con paleta tecnica industrial sin dependencias de iconos externos.
 - **Graficos:** Motor vectorial SVG puro implementado en React (`GraficaLineas.tsx`) sin librerias externas pesadas, garantizando carga instantanea y nitidez absoluta.
 
-### 7.2 Estructura de Directorios del Frontend
-```text
-frontend/
-├── app/
-│   ├── globals.css         # Reset CSS, definiciones de fuentes y variables de color
-│   ├── layout.tsx          # Plantilla raiz HTML, meta tags SEO y proveedor AuthProvider
-│   ├── login/page.tsx      # Pagina dedicada de inicio de sesion
-│   ├── registro/page.tsx   # Pagina dedicada de creacion de cuentas
-│   └── page.tsx            # Punto de entrada principal (renderiza Calculadora)
-├── components/
-│   ├── admin/
-│   │   ├── VentanaLogs.tsx          # Tabla de auditoria con identificadores y marcas de tiempo
-│   │   ├── VentanaTodosCalculos.tsx # Buscador global de operaciones de todos los usuarios
-│   │   └── VentanaUsuarios.tsx      # Matriz de usuarios registrados y volumen transaccional
-│   ├── Calculadora.tsx              # Componente orquestador de pestanas y estado del historial
-│   ├── CampoNumero.tsx              # Input numerico controlado con soporte de sufijos y pasos
-│   ├── GraficaLineas.tsx            # Renderizador SVG de curvas financieras comparativas
-│   ├── Header.tsx                   # Barra superior con estado de autenticacion y selector de roles
-│   ├── TarjetaResultado.tsx         # Bloque visual de alto impacto con el resultado numerico
-│   ├── VentanaAuth.tsx              # Modal rapido de autenticacion in-page
-│   ├── VentanaComparacion.tsx       # Modulo de analisis simultaneo (Simple vs Compuesto)
-│   ├── VentanaCompuesto.tsx         # Modulo de calculo compuesto y frecuencias
-│   ├── VentanaHistorial.tsx         # Tabla interactiva de simulaciones previas
-│   └── VentanaSimple.tsx            # Modulo de calculo simple lineal
-├── context/
-│   └── AuthContext.tsx              # Estado global de sesion, persistencia de tokens y permisos
-└── lib/
-    ├── api.ts                       # Conector HTTP tipado con todos los endpoints del backend
-    ├── finanzas.ts                  # Modulo matematico puro de formulas financieras y series temporales
-    └── formato.ts                   # Formateadores monetarios ($ USD) y porcentuales (%)
+### 7.2 Diagrama del Arbol de Componentes y Flujo de Estado
+
+```mermaid
+graph TD
+    Layout[app/layout.tsx - Root Layout] --> AuthProv[context/AuthContext.tsx - AuthProvider]
+    AuthProv --> Page[app/page.tsx - Home Page]
+    Page --> Calc[components/Calculadora.tsx - Dashboard Central]
+
+    Calc --> HeaderComp[components/Header.tsx - Barra de Estado y Sesion]
+    Calc --> NavTabs[Navegacion de Pestanas: Ventanas 1 a 4 + Admin]
+
+    NavTabs --> V1[VentanaSimple.tsx - Ventana 1]
+    NavTabs --> V2[VentanaCompuesto.tsx - Ventana 2]
+    NavTabs --> V3[VentanaComparacion.tsx - Ventana 3]
+    NavTabs --> V4[VentanaHistorial.tsx - Ventana 4]
+    NavTabs --> VAdm1[admin/VentanaUsuarios.tsx]
+    NavTabs --> VAdm2[admin/VentanaTodosCalculos.tsx]
+    NavTabs --> VAdm3[admin/VentanaLogs.tsx]
+
+    V1 & V2 & V3 --> FormInputs[CampoNumero.tsx - Inputs Validados]
+    V1 & V2 & V3 --> CardRes[TarjetaResultado.tsx - Cifras Clave]
+    V3 --> SvgChart[GraficaLineas.tsx - Lienzo Vectorial SVG]
+
+    Calc --> ApiService[lib/api.ts - Cliente HTTP Conector]
+    V1 & V2 & V3 --> MathLib[lib/finanzas.ts - Formulas Puras]
 ```
 
 ### 7.3 Flujo de Pantallas y Navegacion
@@ -427,16 +493,32 @@ stateDiagram-v2
 ```
 
 ### 7.4 Logica de la Grafica Vectorial (`GraficaLineas.tsx`)
-El componente de proyeccion grafica resuelve de forma analitica el trazado de dos curvas sobre un lienzo SVG dinamico:
-1. **Normalizacion de Coordenadas:**
-   - Se toma el valor maximo del conjunto: $V_{\max} = \max(\max(S), \max(C))$.
-   - Se calcula la coordenada horizontal para el ano $i$: $X_i = \text{PaddingLeft} + \frac{i}{t} \cdot \text{AnchoEfectivo}$.
-   - Se calcula la coordenada vertical invertida (origen superior en SVG): $Y_i = \text{AlturaTotal} - \text{PaddingBottom} - \left( \frac{V_i}{V_{\max}} \right) \cdot \text{AlturaEfectiva}$.
-2. **Generacion de Curvas Path SVG:**
-   - La serie lineal genera un trazado recto continuo con color azul pizarra (`#223342`).
-   - La serie compuesta genera un trazado poligonal suavizado con color verde esmeralda industrial (`#059669`).
-3. **Punto de Divergencia:**
-   - Se evalua la condicion de despegue $C_i > 1.01 \cdot S_i$ para ubicar un marcador con anillo de realce visual en el ano de corte.
+
+#### Diagrama del Pipeline de Renderizado SVG Matematico
+```mermaid
+flowchart TD
+    Vars[Variables de Entrada: Capital P, Tasa r, Plazo t, Frecuencia n] --> CalcSeries[Calculo de Series en finanzas.ts]
+    
+    CalcSeries --> S_Array["serieSimple: [S_0, S_1, ..., S_t]"]
+    CalcSeries --> C_Array["serieCompuesta: [C_0, C_1, ..., C_t]"]
+
+    S_Array & C_Array --> FindMax["Identificar Valor Maximo: V_max = max(max(S), max(C))"]
+    S_Array & C_Array --> FindDivergence["Detectar Ano de Separacion: C_i > 1.01 * S_i"]
+
+    FindMax --> NormalizeCoords["Normalizacion Analitica de Coordenadas:
+    X_i = PadLeft + (i / t) * Width
+    Y_i = Height - PadBottom - (V_i / V_max) * EffHeight"]
+
+    NormalizeCoords --> BuildPathSimple["Construir Trazo Lineal: path d='M ... L ...'"]
+    NormalizeCoords --> BuildPathCompuesto["Construir Trazo Exponencial: path d='M ... L ...'"]
+
+    BuildPathSimple & BuildPathCompuesto & FindDivergence --> RenderSVG["Renderizado en Componente SVG:
+    - Eje X cronologico y Eje Y monetario
+    - Curva lineal (#223342)
+    - Curva compuesta (#059669)
+    - Marcador del ano de divergencia
+    - Tooltip interactivo con valores al pasar el cursor"]
+```
 
 
 ---
@@ -579,30 +661,30 @@ sequenceDiagram
 
 ---
 
-## 10. GUIA DE INSTALACION, CONFIGURACION Y EJECUCION
+## 10. GUIA DE INSTALACION, CONFIGURACION Y SOLUCION DE PROBLEMAS
 
 ### 10.1 Requisitos Previos
 - **Node.js:** Version 18.17.0 o superior (recomendado Node 20 LTS).
 - **Gestor de Paquetes:** `npm` v9 o superior.
 - **Git:** Instalado en el sistema operativo.
-- **Base de Datos:** Instancia de PostgreSQL en Supabase o PostgreSQL local.
+- **Base de Datos:** Instancia de PostgreSQL en Supabase.
 
 ### 10.2 Configuracion de Variables de Entorno
 
 #### 1. Backend (`backend/.env`):
 ```env
-# Puerto de escucha del servidor Express
+# Puerto de escucha del servidor Express (desarrollo local)
 PORT=4000
 
-# Cadena de conexion directa a PostgreSQL (Supabase con pool de conexiones y SSL)
+# Cadena de conexion oficial a PostgreSQL via Connection Pooler IPv4 de Supabase
 DATABASE_URL="postgresql://postgres.elqxtneoekcqrwvgcseu:proyectofinanciero@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 # Clave secreta para la firma y validacion de tokens JWT
-JWT_SECRET="super-secret-jwt-key-financiera-2026"
+JWT_SECRET="super_secreto_financiero_jwt_mvp_2026"
 
 # URL publica y clave anonima del proyecto Supabase
-SUPABASE_URL="https://nvyrmmrlfgpquuvyqgac.supabase.co"
-SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52eXJtbXJsZmdwcXV1dnlxZ2FjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIwNDQ5MTAsImV4cCI6MjA1NzYyMDkxMH0.iA5i60kUvA3iV1E4Y5x0C_q_W3gZqC2zGfQvJ-lGjKc"
+SUPABASE_URL="https://elqxtneoekcqrwvgcseu.supabase.co"
+SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscXh0bmVvZWtjcXJ3dmdjc2V1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NTc4OTEsImV4cCI6MjEwNDIzMzg5MX0.4amlu91XSsNAhyfNRbOiAwWFKydKlZsksgMJ2HB61nc"
 ```
 
 #### 2. Frontend (`frontend/.env.local`):
@@ -621,7 +703,6 @@ cd proyecto_is
 
 #### Paso 2: Instalacion de Dependencias
 ```bash
-# Instalar dependencias raiz y de ambos modulos
 npm install
 npm --prefix backend install
 npm --prefix frontend install
@@ -629,18 +710,12 @@ npm --prefix frontend install
 
 #### Paso 3: Configuracion y Sembrado de la Base de Datos
 ```bash
-# Generar el cliente fuertemente tipado de Prisma
-npm --prefix backend run db:generate
-
-# Aplicar las migraciones o sincronizar el esquema con Supabase
-npm --prefix backend run db:push
-
-# Ejecutar el script de sembrado inicial (Crea cuentas ADMIN y USER)
-npm --prefix backend run db:seed
+npm --prefix backend run prisma:generate
+npm --prefix backend run prisma:push
+npm --prefix backend run prisma:seed
 ```
 
 #### Paso 4: Ejecucion en Modo Desarrollo
-Para arrancar simultaneamente el backend en el puerto **4000** y el frontend en el puerto **3002**:
 ```bash
 npm run dev
 ```
@@ -648,7 +723,20 @@ npm run dev
 - Acceso a la API REST: **[http://localhost:4000/api](http://localhost:4000/api)**
 - Estado de Salud (Health Check): **[http://localhost:4000/api/health](http://localhost:4000/api/health)**
 
-### 10.4 Cuentas Maestras Predeterminadas del Sistema
+### 10.4 Solucion de Problemas Comunes (Troubleshooting)
+
+1. **Error `EPERM: operation not permitted` al ejecutar `prisma:generate` en Windows:**
+   - **Causa:** El servidor de desarrollo (`npm run dev`) se encuentra en ejecucion en una terminal y Windows bloquea el archivo binario `query_engine-windows.dll.node` en memoria impidiendo que sea sobrescrito.
+   - **Solucion:** Detener el servidor con `Ctrl + C`, ejecutar `npm --prefix backend run prisma:generate`, y reiniciar el servidor.
+2. **Error `Can't reach database server at db.xxx.supabase.co:5432` en Vercel:**
+   - **Causa:** La direccion directa de Supabase es solo IPv6 y Vercel Serverless opera con salida IPv4.
+   - **Solucion:** Utilizar la cadena del Connection Pooler en el puerto `6543`:  
+     `aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true`.
+3. **Error `Failed to fetch` en Frontend de Vercel:**
+   - **Causa:** Variable `NEXT_PUBLIC_API_URL` faltante o desactualizada sin hacer Redeploy en Vercel, o politica CORS restrictiva en el backend.
+   - **Solucion:** Configurar `NEXT_PUBLIC_API_URL=https://tu-backend.vercel.app/api`, habilitar `origin: true` en el backend y ejecutar un Redeploy del proyecto Frontend.
+
+### 10.5 Cuentas Maestras Predeterminadas del Sistema
 
 | Tipo de Cuenta | Correo Electronico | Contrasena | Rol Asignado | Privilegios |
 |---|---|---|---|---|
@@ -673,4 +761,3 @@ npm run dev
 - **Contraste Cromatico:** Ratio superior a 5.5:1 en todos los textos de control y lectura.
 - **Navegacion por Teclado:** Todas las pestanas y botones poseen estados de foco visibles (`focus:ring-2 focus:ring-emerald-500`).
 - **Lectores de Pantalla:** Formularios con etiquetas semanticas (`<label for="...">`), atributos `aria-label`, `aria-current="page"` en la pestana seleccionada, y regiones `<main>` y `<nav>` estructuradas.
-
