@@ -67,7 +67,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     let errorMsg = `Error HTTP ${res.status}`;
     try {
       const data = await res.json();
-      if (data.error) errorMsg = data.error;
+      if (data.detalle) errorMsg = `${data.error} (${data.detalle})`; else if (data.error) errorMsg = data.error;
     } catch {
       // Si la respuesta no es un JSON estructurado, se conserva el codigo de estado HTTP.
     }

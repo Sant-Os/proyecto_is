@@ -58,7 +58,7 @@ export async function crearCalculo(req: Request, res: Response) {
     return res.status(201).json(calculo);
   } catch (error) {
     console.error("Error al persistir calculo financiero:", error);
-    return res.status(500).json({ error: "Error interno al guardar calculo." });
+    return res.status(500).json({ error: "Error interno al guardar calculo.", detalle: (error as any)?.message || String(error) });
   }
 }
 
@@ -90,7 +90,7 @@ export async function obtenerHistorial(req: Request, res: Response) {
     return res.json(calculos);
   } catch (error) {
     console.error("Error al obtener historial de calculos:", error);
-    return res.status(500).json({ error: "Error al recuperar historial de calculos." });
+    return res.status(500).json({ error: "Error al recuperar historial de calculos.", detalle: (error as any)?.message || String(error) });
   }
 }
 

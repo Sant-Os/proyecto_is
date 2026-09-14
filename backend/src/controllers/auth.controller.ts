@@ -65,7 +65,7 @@ export async function login(req: Request, res: Response) {
     });
   } catch (error) {
     console.error("Error al procesar login:", error);
-    return res.status(500).json({ error: "Error interno en el servidor." });
+    return res.status(500).json({ error: "Error interno en el servidor.", detalle: (error as any)?.message || String(error) });
   }
 }
 
@@ -160,7 +160,7 @@ export async function register(req: Request, res: Response) {
     });
   } catch (error) {
     console.error("Error al registrar usuario:", error);
-    return res.status(500).json({ error: "Error interno al registrar usuario." });
+    return res.status(500).json({ error: "Error interno al registrar usuario.", detalle: (error as any)?.message || String(error) });
   }
 }
 
