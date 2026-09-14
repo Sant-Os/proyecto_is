@@ -1,0 +1,75 @@
+// Configuracion del conector principal a la base de datos PostgreSQL hospedada en Supabase.
+// La URL de conexion incluye el pool de conexiones para transacciones seguras con Prisma ORM.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Generador del cliente fuertemente tipado de Prisma para su consumo en Node.js y Express.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Roles de acceso del sistema:
+// - USER: Cliente estandar con permisos para calcular y revisar su propio historial.
+// - ADMIN: Supervisor con acceso global a auditoria, lista de usuarios y todos los calculos.
+enum Rol {
+  USER
+  ADMIN
+}
+
+// Modalidades financieras soportadas por la plataforma:
+// - Simple: Crecimiento lineal basado exclusivamente en el capital inicial.
+// - Compuesto: Crecimiento exponencial con capitalizacion periodica de intereses.
+// - Comparacion: Analisis simultaneo de ambas modalidades bajo los mismos parametros.
+enum TipoCalculo {
+  Simple
+  Compuesto
+  Comparacion
+}
+
+// Modelo de persistencia para las cuentas de usuario en la capa publica.
+// Su clave primaria 'id' se vincula de manera directa (1:1) con el identificador UUID de auth.users en Supabase.
+model Usuario {
+  id        String     @id @default(uuid()) @db.Uuid
+  email     String     @unique
+  nombre    String
+  password  String
+  rol       Rol        @default(USER)
+  creadoEn  DateTime   @default(now())
+  calculos  Calculo[]
+  logs      Log[]
+}
+
+// Registro historico de cada simulacion y proyeccion financiera generada por los usuarios.
+// Permite trazabilidad completa de variables de entrada (capital, tasa, tiempo) y resultados (final, interes).
+model Calculo {
+  id        String      @id @default(uuid())
+  usuarioId String      @db.Uuid
+  usuario   Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo      TipoCalculo
+  capital   Float
+  tasa      Float
+  anos      Float
+  final     Float
+  interes   Float
+  extra     String?     @default("")
+  fecha     DateTime    @default(now())
+
+  @@index([usuarioId])
+  @@index([fecha])
+}
+
+// Registro inmutable de auditoria para monitoreo de seguridad y cumplimiento normativo.
+// Almacena inicios de sesion, creacion o eliminacion de calculos y accesos a modulos administrativos.
+model Log {
+  id        String   @id @default(uuid())
+  usuarioId String?  @db.Uuid
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  accion    String
+  detalle   String
+  ip        String?
+  fecha     DateTime @default(now())
+
+  @@index([fecha])
+}

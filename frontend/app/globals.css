@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --fuente-sans: var(--font-ibm-plex-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fuente-mono: var(--font-ibm-plex-mono), ui-monospace, "Courier New", monospace;
+}
+
+body {
+  font-family: var(--fuente-sans);
+  color: #14202a;
+}
+
+.font-mono {
+  font-family: var(--fuente-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
