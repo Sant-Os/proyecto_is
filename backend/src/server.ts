@@ -14,9 +14,10 @@ const PORT = process.env.PORT || 4000;
 
 // Configuracion de CORS para permitir comunicacion segura con las instancias frontend en desarrollo.
 app.use(cors({
-  origin: ["http://localhost:3002", "http://127.0.0.1:3002", "http://localhost:3000", "http://localhost:3001"],
+  origin: true,
   credentials: true,
 }));
+app.options("*", cors());
 
 // Parseo automatico de cuerpos de peticion en formato JSON.
 app.use(express.json());

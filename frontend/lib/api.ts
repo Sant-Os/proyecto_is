@@ -6,7 +6,14 @@
  */
 
 // Direccion base de la API REST del backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+// Direccion base de la API REST del backend con normalizacion automatica
+function getApiUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+  const trimmed = envUrl.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+}
+
+const API_URL = getApiUrl();
 
 /**
  * Recupera el token JWT guardado en el almacenamiento local del navegador.
@@ -45,10 +52,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    console.error("Error de conexion de red con la API:", API_URL, netErr);
+    throw new Error(`No se pudo conectar con el servidor (${API_URL}). Verifica que el backend este activo y permita CORS.`);
+  }
 
   if (!res.ok) {
     let errorMsg = `Error HTTP ${res.status}`;
