@@ -69,11 +69,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: "Ocurrio un error inesperado en el servidor." });
 });
 
-// Inicio del servidor HTTP.
-app.listen(PORT, () => {
-  console.log("=============================================");
-  console.log(`Backend iniciado exitosamente en puerto ${PORT}`);
-  console.log(`   URL API: http://localhost:${PORT}/api`);
-  console.log(`   Health:  http://localhost:${PORT}/api/health`);
-  console.log("=============================================");
-});
+// Inicio del servidor HTTP (localmente; en Vercel opera como serverless).
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log("=============================================");
+    console.log(`Backend iniciado exitosamente en puerto ${PORT}`);
+    console.log(`   URL API: http://localhost:${PORT}/api`);
+    console.log(`   Health:  http://localhost:${PORT}/api/health`);
+    console.log("=============================================");
+  });
+}
+
+export default app;
