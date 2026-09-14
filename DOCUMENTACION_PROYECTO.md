@@ -595,7 +595,7 @@ sequenceDiagram
 PORT=4000
 
 # Cadena de conexion directa a PostgreSQL (Supabase con pool de conexiones y SSL)
-DATABASE_URL="postgresql://postgres.nvyrmmrlfgpquuvyqgac:carlosenrique141203@aws-0-us-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DATABASE_URL="postgresql://postgres.elqxtneoekcqrwvgcseu:proyectofinanciero@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 # Clave secreta para la firma y validacion de tokens JWT
 JWT_SECRET="super-secret-jwt-key-financiera-2026"
